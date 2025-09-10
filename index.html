@@ -81,13 +81,23 @@
 
     <script>
         // --- Password Protection Logic ---
-        const correctPassword = 'password123'; // ⚠️ Change this to a secure password!
+        const correctPasswordHash = 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3';
+        
         const passwordModal = document.getElementById('password-modal');
         const passwordForm = document.getElementById('password-form');
         const passwordInput = document.getElementById('password-input');
         const unlockButton = document.getElementById('unlock-button');
         const errorMessage = document.getElementById('error-message');
         const mainContent = document.getElementById('main-content');
+
+        // SHA-256 hash function
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return hashHex;
+        }
 
         // Initially disable the form
         passwordForm.classList.add('form-disabled');
@@ -108,15 +118,16 @@
             }
         });
 
-        passwordForm.addEventListener('submit', function(event) {
+        passwordForm.addEventListener('submit', async function(event) {
             event.preventDefault(); // Prevent page reload
             
             // Don't process if button is disabled
             if (unlockButton.disabled) return;
             
             const enteredPassword = passwordInput.value;
+            const enteredPasswordHash = await sha256(enteredPassword);
 
-            if (enteredPassword === correctPassword) {
+            if (enteredPasswordHash === correctPasswordHash) {
                 // On correct password, hide modal and show main content
                 passwordModal.classList.add('hidden');
                 mainContent.classList.remove('hidden');
