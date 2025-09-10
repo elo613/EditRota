@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="en" class="h-full">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-E">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rota and Leave Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <style>
         /* Custom styles for a smooth experience */
         body {
@@ -81,26 +82,16 @@
 
     <script>
         // --- Password Protection Logic ---
-        const correctPasswordHash = '78c0ed80d7dfa7a5718077000751e679a64537174de74887c615edfee98c647e';
         
+        // ADDED: Variable to hold the decrypted PAT in memory
+        let GITHUB_PAT = null;
+
         const passwordModal = document.getElementById('password-modal');
         const passwordForm = document.getElementById('password-form');
         const passwordInput = document.getElementById('password-input');
         const unlockButton = document.getElementById('unlock-button');
         const errorMessage = document.getElementById('error-message');
         const mainContent = document.getElementById('main-content');
-
-        // SHA-256 hash function
-        async function sha256(message) {
-            const msgBuffer = new TextEncoder().encode(message);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            return hashHex;
-        }
-
-        // Initially disable the form
-        passwordForm.classList.add('form-disabled');
         
         // Enable/disable button based on password input
         passwordInput.addEventListener('input', function() {
@@ -108,43 +99,50 @@
             unlockButton.disabled = !hasPassword;
             
             if (hasPassword) {
-                passwordForm.classList.remove('form-disabled');
                 unlockButton.classList.remove('opacity-50', 'cursor-not-allowed');
-                unlockButton.classList.add('hover:bg-indigo-700');
             } else {
-                passwordForm.classList.add('form-disabled');
                 unlockButton.classList.add('opacity-50', 'cursor-not-allowed');
-                unlockButton.classList.remove('hover:bg-indigo-700');
             }
         });
 
+        // MODIFIED: Password submission now decrypts the token
         passwordForm.addEventListener('submit', async function(event) {
-            event.preventDefault(); // Prevent page reload
-            
-            // Don't process if button is disabled
+            event.preventDefault(); 
             if (unlockButton.disabled) return;
             
             const enteredPassword = passwordInput.value;
-            const enteredPasswordHash = await sha256(enteredPassword);
 
-            if (enteredPasswordHash === correctPasswordHash) {
-                // On correct password, hide modal and show main content
-                passwordModal.classList.add('hidden');
-                mainContent.classList.remove('hidden');
+            try {
+                // 1. Fetch the encrypted token file
+                const response = await fetch('encrypted-token.json');
+                if (!response.ok) throw new Error("Could not load encrypted token file.");
+                const data = await response.json();
                 
-                // Load the default tab view
-                loadDefaultTab();
-            } else {
-                // On incorrect password, show error and clear input
+                // 2. Try to decrypt the token with the entered password
+                const decryptedBytes = CryptoJS.AES.decrypt(data.encryptedToken, enteredPassword);
+                const decryptedToken = decryptedBytes.toString(CryptoJS.enc.Utf8);
+                
+                // 3. Check if decryption was successful (a valid token should start with 'ghp_')
+                if (decryptedToken && decryptedToken.startsWith('ghp_')) {
+                    // SUCCESS: Store the token and show the main content
+                    GITHUB_PAT = decryptedToken; 
+                    passwordModal.classList.add('hidden');
+                    mainContent.classList.remove('hidden');
+                    loadDefaultTab();
+                } else {
+                    // Decryption failed, which means an incorrect password was entered
+                    throw new Error("Incorrect password.");
+                }
+
+            } catch (error) {
+                // On incorrect password or other errors, show feedback to the user
+                console.error("Decryption failed:", error);
                 errorMessage.textContent = 'Incorrect password. Please try again.';
                 passwordInput.value = '';
-                
-                // Reset button state
                 unlockButton.disabled = true;
                 unlockButton.classList.add('opacity-50', 'cursor-not-allowed');
-                unlockButton.classList.remove('hover:bg-indigo-700');
                 
-                // Shake animation for feedback
+                // Shake animation for visual feedback
                 passwordModal.querySelector('div').classList.add('animate-shake');
                 setTimeout(() => {
                     passwordModal.querySelector('div').classList.remove('animate-shake');
@@ -171,13 +169,24 @@
         const tabs = document.querySelectorAll('.tab-button');
 
         /**
-         * Opens a URL in the iframe and sets the active tab.
+         * Opens a URL in the iframe, sets the active tab, and securely sends the token.
          * @param {string} url - The URL of the page to load.
          * @param {HTMLElement} clickedTab - The tab element that was clicked.
          */
         function openTab(url, clickedTab) {
             // Set the iframe source
             contentFrame.src = url;
+
+            // ADDED: Wait for the iframe to fully load before sending the token
+            contentFrame.onload = () => {
+                if (GITHUB_PAT) {
+                    // Use postMessage to securely send the token to the iframe's content window.
+                    // The '*' target origin is acceptable for local files (file://).
+                    contentFrame.contentWindow.postMessage(GITHUB_PAT, '*');
+                } else {
+                    console.error("Cannot send token: GITHUB_PAT is not available.");
+                }
+            };
 
             // Update the active state on tabs
             tabs.forEach(tab => {
@@ -186,18 +195,13 @@
             clickedTab.classList.add('active');
         }
 
-        // Function to load the default tab
+        // Function to load the default tab after successful login
         function loadDefaultTab() {
             const defaultTab = document.getElementById('rota-tab');
-            // Check if default tab exists to avoid errors
             if (defaultTab) {
                openTab('rota.html', defaultTab);
             }
         }
-        
-        // Note: The DOMContentLoaded event listener is removed from here.
-        // The default tab is now loaded via the loadDefaultTab() function 
-        // after the password has been successfully entered.
     </script>
 
 </body>
