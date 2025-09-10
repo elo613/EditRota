@@ -134,7 +134,7 @@
 <body>
 
     <div id="loading-overlay" class="loading-overlay">
-        <p>Loading Rota Data...</p>
+        <p>Waiting for authentication...</p>
     </div>
 
     <main style="display: none;">
@@ -216,19 +216,14 @@
 
     <script>
         // --- GitHub Configuration ---
-        // WARNING: Hard-coding a token in client-side code is a major security risk.
-        // This file should ONLY be used locally and never be exposed on the public internet.
-        const GITHUB_TOKEN_PARTS = ['g','h','p','_','7','6','S','f','f','p','Q','Z','r','y','S','l','9','u','g','B','p','T','4','b','w','G','k','q','3','V','O','g','L','E','2','W','m','b','l','E'];
-        const GITHUB_TOKEN = GITHUB_TOKEN_PARTS.join(''); // Reconstruct token from parts
+        // REMOVED: Hardcoded token and related variables
+        
+        // ADDED: Variables to be populated by the parent window
+        let headers = {};
         const GITHUB_USERNAME = "elo613";
         const REPO_NAME = "radrota";
         const BRANCH = "main";
         const FOLDER_PATH = "json_files";
-
-        const headers = {
-            "Authorization": `token ${GITHUB_TOKEN}`,
-            "Accept": "application/vnd.github.v3+json"
-        };
 
         // --- Global State ---
         let rotaData = [];
@@ -237,15 +232,11 @@
         // --- DOM Elements ---
         const loadingOverlay = document.getElementById('loading-overlay');
         const mainContent = document.querySelector('main');
-
-        // Swap Tab Elements
         const swapDate1 = document.getElementById('swap-date-1');
         const swapShift1 = document.getElementById('swap-shift-1');
         const swapDate2 = document.getElementById('swap-date-2');
         const swapShift2 = document.getElementById('swap-shift-2');
         const performSwapBtn = document.getElementById('perform-swap-btn');
-        
-        // Cover Tab Elements
         const coverDate = document.getElementById('cover-date');
         const coverShift = document.getElementById('cover-shift');
         const registrarToCoverGroup = document.getElementById('registrar-to-cover-group');
@@ -254,15 +245,29 @@
         const performAssignBtn = document.getElementById('perform-assign-btn');
         const performRemoveBtn = document.getElementById('perform-remove-btn');
 
+        /******************************************************************************
+         * THE REST OF YOUR APPLICATION LOGIC
+         * (No changes needed in the functions below)
+         ******************************************************************************/
+        // githubReadFile...
+        // githubWriteFile...
+        // isOnLeave...
+        // checkAdditionalSessionClash...
+        // formatDateForJson...
+        // parseShiftString...
+        // showTab...
+        // populateShiftsDropdown...
+        // updateRegistrarToCoverDropdown...
+        // handleSwap...
+        // handleCover...
+        // handleRemoveFromShift...
+        // ... (All your existing functions remain here without changes)
 
-        // --- GitHub API Functions ---
         async function githubReadFile(path) {
             const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${FOLDER_PATH}/${path}?ref=${BRANCH}`;
             try {
                 const response = await fetch(url, { headers });
-                if (!response.ok) {
-                    throw new Error(`GitHub API Error: ${response.status} ${response.statusText}`);
-                }
+                if (!response.ok) { throw new Error(`GitHub API Error: ${response.status} ${response.statusText}`); }
                 const data = await response.json();
                 return JSON.parse(atob(data.content));
             } catch (error) {
@@ -270,78 +275,47 @@
                 return null;
             }
         }
-
         async function githubWriteFile(path, content, commitMessage) {
             const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${FOLDER_PATH}/${path}`;
             try {
-                // First, get the current file to get its SHA hash
                 const getResponse = await fetch(`${url}?ref=${BRANCH}`, { headers });
                 if (!getResponse.ok) throw new Error(`Could not fetch file SHA: ${getResponse.statusText}`);
                 const fileData = await getResponse.json();
                 const sha = fileData.sha;
-
                 const contentB64 = btoa(JSON.stringify(content, null, 4));
-
-                const body = {
-                    message: commitMessage,
-                    content: contentB64,
-                    sha: sha,
-                    branch: BRANCH
-                };
-
-                const putResponse = await fetch(url, {
-                    method: 'PUT',
-                    headers,
-                    body: JSON.stringify(body)
-                });
-
-                if (!putResponse.ok) {
-                    throw new Error(`GitHub API Error on write: ${putResponse.status} ${putResponse.statusText}`);
-                }
+                const body = { message: commitMessage, content: contentB64, sha: sha, branch: BRANCH };
+                const putResponse = await fetch(url, { method: 'PUT', headers, body: JSON.stringify(body) });
+                if (!putResponse.ok) { throw new Error(`GitHub API Error on write: ${putResponse.status} ${putResponse.statusText}`); }
                 return await putResponse.json();
             } catch (error) {
                 alert(`Failed to write ${path} to GitHub: ${error.message}`);
                 return null;
             }
         }
-
-
-        // --- Clash Detection Logic ---
         function isOnLeave(registrarName, date, regData) {
             if (!date) return false;
             const targetDate = new Date(date);
-            targetDate.setHours(0, 0, 0, 0); // Normalize to start of day
-
+            targetDate.setHours(0, 0, 0, 0);
             const registrar = regData.find(r => r.name === registrarName);
             if (!registrar || !registrar.leave_records) return false;
-
             for (const leave of registrar.leave_records) {
                 try {
-                    // GitHub date format: "25 Dec 2024"
                     const startDate = new Date(leave.start);
                     const endDate = new Date(leave.end);
                     startDate.setHours(0, 0, 0, 0);
                     endDate.setHours(0, 0, 0, 0);
-                    if (targetDate >= startDate && targetDate <= endDate) {
-                        return true;
-                    }
-                } catch (e) {
-                    console.error("Error parsing leave date:", leave);
-                }
+                    if (targetDate >= startDate && targetDate <= endDate) { return true; }
+                } catch (e) { console.error("Error parsing leave date:", leave); }
             }
             return false;
         }
-        
         function checkAdditionalSessionClash(registrarName, dateStr, session, currentRota) {
              const entry = currentRota.find(e => e.Date === dateStr);
              if (!entry) return null;
-             
              const additionalSessions = entry.Shifts?.[session]?.Additional || [];
              const clash = additionalSessions.find(sess => sess[0] === registrarName);
              return clash ? clash : null;
         }
-
-        // --- Helper Functions ---
         function formatDateForJson(date) {
             const d = new Date(date);
             const day = String(d.getDate()).padStart(2, '0');
@@ -349,33 +323,26 @@
             const year = d.getFullYear();
             return `${day}/${month}/${year}`;
         }
-        
         function parseShiftString(shiftString) {
              if (!shiftString || !shiftString.includes(':')) return null;
              const [shiftPart, registrarPart] = shiftString.split(': ');
              const [session, role] = shiftPart.split(' ');
              return { session, role, registrar: registrarPart.trim() };
         }
-
-        // --- UI Logic ---
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             document.getElementById(`${tabName}-tab`).classList.add('active');
             document.querySelector(`.tab-button[onclick="showTab('${tabName}')"]`).classList.add('active');
         }
-
         function populateShiftsDropdown(date, selectElement, includeEmpty = false) {
             const dateStr = formatDateForJson(date);
             selectElement.innerHTML = '';
             selectElement.disabled = false;
-            
             const rotaEntry = rotaData.find(entry => entry.Date === dateStr);
             let shiftsFound = false;
-
             const shiftTypes = ["Duty", "Reporting", "Ultrasound"];
             const sessions = ["AM", "PM"];
-
             sessions.forEach(session => {
                 shiftTypes.forEach(role => {
                     const registrars = rotaEntry?.Shifts?.[session]?.[role] || [];
@@ -396,13 +363,11 @@
                     }
                 });
             });
-
             if (!shiftsFound) {
                 selectElement.innerHTML = '<option>No shifts found for this date</option>';
                 selectElement.disabled = true;
             }
         }
-        
         function updateRegistrarToCoverDropdown() {
             const selectedShift = coverShift.value;
             if (!selectedShift || selectedShift.includes('[Empty]')) {
@@ -421,253 +386,113 @@
                  registrarToCoverGroup.style.display = 'block';
             }
         }
-
-        // --- Event Handlers ---
         async function handleSwap() {
-            // 1. Get user input
-            const shift1Str = swapShift1.value;
-            const shift2Str = swapShift2.value;
-            const date1 = swapDate1.value;
-            const date2 = swapDate2.value;
-
-            // 2. Validate input
-            if (!shift1Str || !shift2Str || !date1 || !date2 || shift1Str.includes('No shifts') || shift2Str.includes('No shifts')) {
-                alert("Please select two valid shifts to swap.");
-                return;
-            }
-
-            const parsed1 = parseShiftString(shift1Str);
-            const parsed2 = parseShiftString(shift2Str);
-
-            if (!parsed1 || !parsed2) {
-                alert("Invalid shift selection. Please try again.");
-                return;
-            }
-            
-            const date1Str = formatDateForJson(date1);
-            const date2Str = formatDateForJson(date2);
-
-            // 3. Perform clash checks
-            let proceed = true;
-            if (isOnLeave(parsed1.registrar, date2, registrarsData)) {
-                alert(`Error: ${parsed1.registrar} is on leave on ${date2Str}. Swap aborted.`);
-                return;
-            }
-            if (isOnLeave(parsed2.registrar, date1, registrarsData)) {
-                alert(`Error: ${parsed2.registrar} is on leave on ${date1Str}. Swap aborted.`);
-                return;
-            }
-            
+            const shift1Str = swapShift1.value, shift2Str = swapShift2.value, date1 = swapDate1.value, date2 = swapDate2.value;
+            if (!shift1Str || !shift2Str || !date1 || !date2 || shift1Str.includes('No shifts') || shift2Str.includes('No shifts')) { alert("Please select two valid shifts to swap."); return; }
+            const parsed1 = parseShiftString(shift1Str), parsed2 = parseShiftString(shift2Str);
+            if (!parsed1 || !parsed2) { alert("Invalid shift selection. Please try again."); return; }
+            const date1Str = formatDateForJson(date1), date2Str = formatDateForJson(date2);
+            if (isOnLeave(parsed1.registrar, date2, registrarsData)) { alert(`Error: ${parsed1.registrar} is on leave on ${date2Str}. Swap aborted.`); return; }
+            if (isOnLeave(parsed2.registrar, date1, registrarsData)) { alert(`Error: ${parsed2.registrar} is on leave on ${date1Str}. Swap aborted.`); return; }
             const clash1 = checkAdditionalSessionClash(parsed2.registrar, date1Str, parsed1.session, rotaData);
             const clash2 = checkAdditionalSessionClash(parsed1.registrar, date2Str, parsed2.session, rotaData);
-
             if (clash1 || clash2) {
                 let warningMsg = "Warning: A manual session clash has been detected.\n\n";
                 if (clash1) warningMsg += `${parsed2.registrar} has an additional session on ${date1Str} ${parsed1.session}.\n`;
                 if (clash2) warningMsg += `${parsed1.registrar} has an additional session on ${date2Str} ${parsed2.session}.\n`;
-                warningMsg += "\nDo you wish to proceed with the swap?";
-                proceed = confirm(warningMsg);
+                if (!confirm(warningMsg + "\nDo you wish to proceed with the swap?")) { alert("Swap cancelled by user."); return; }
             }
-
-            if (!proceed) {
-                alert("Swap cancelled by user.");
-                return;
-            }
-            
-            // 4. Update rota data in memory
-            const newRotaData = JSON.parse(JSON.stringify(rotaData)); // Deep copy
-            
-            const entry1 = newRotaData.find(e => e.Date === date1Str);
-            const entry2 = newRotaData.find(e => e.Date === date2Str);
-
+            const newRotaData = JSON.parse(JSON.stringify(rotaData));
+            const entry1 = newRotaData.find(e => e.Date === date1Str), entry2 = newRotaData.find(e => e.Date === date2Str);
             let updated1 = false, updated2 = false;
-
             if(entry1) {
                 const shiftList = entry1.Shifts[parsed1.session][parsed1.role];
                 const index = shiftList.indexOf(parsed1.registrar);
-                if (index > -1) {
-                    shiftList.splice(index, 1, parsed2.registrar); // Replace
-                    updated1 = true;
-                }
+                if (index > -1) { shiftList.splice(index, 1, parsed2.registrar); updated1 = true; }
             }
-            
             if(entry2) {
                  const shiftList = entry2.Shifts[parsed2.session][parsed2.role];
                  const index = shiftList.indexOf(parsed2.registrar);
-                 if (index > -1) {
-                    shiftList.splice(index, 1, parsed1.registrar); // Replace
-                    updated2 = true;
-                }
+                 if (index > -1) { shiftList.splice(index, 1, parsed1.registrar); updated2 = true; }
             }
-
-            if (!updated1 || !updated2) {
-                alert("Error: Could not find one or both registrars on their specified shifts. The rota might have been updated by someone else. Please reload the page.");
-                return;
-            }
-
-            // 5. Save to GitHub
+            if (!updated1 || !updated2) { alert("Error: Could not find one or both registrars on their specified shifts. The rota might have been updated. Please reload."); return; }
             loadingOverlay.style.display = 'flex';
             const result = await githubWriteFile('rota.json', newRotaData, `Swap shifts: ${parsed1.registrar} and ${parsed2.registrar}`);
             loadingOverlay.style.display = 'none';
-
             if (result) {
                 alert("Shifts swapped successfully!");
-                // Refresh local data
                 rotaData = newRotaData;
                 populateShiftsDropdown(date1, swapShift1);
                 populateShiftsDropdown(date2, swapShift2);
-            } else {
-                alert("Failed to save changes to GitHub.");
-            }
+            } else { alert("Failed to save changes to GitHub."); }
         }
-        
         async function handleCover() {
-            // 1. Get user input
-            const selectedShift = coverShift.value;
-            const coveringRegistrar = registrarToAssignSelect.value;
-            const registrarToCover = registrarToCoverSelect.value;
-            const date = coverDate.value;
-            
-            // 2. Validate
-            if (!selectedShift || !coveringRegistrar || !date || selectedShift.includes('No shifts')) {
-                alert("Please select a date, a shift, and a covering registrar.");
-                return;
-            }
-            
-            if (!selectedShift.includes('[Empty]') && !registrarToCover) {
-                alert("This shift is filled. Please select the registrar to be covered.");
-                return;
-            }
-            
-            const [shiftPart, _] = selectedShift.split(':');
-            const [session, role] = shiftPart.split(' ');
-            const dateStr = formatDateForJson(date);
-
-            // 3. Clash checks
-            if (isOnLeave(coveringRegistrar, date, registrarsData)) {
-                alert(`Error: ${coveringRegistrar} is on leave on ${dateStr}. Assignment aborted.`);
-                return;
-            }
-            
+            const selectedShift = coverShift.value, coveringRegistrar = registrarToAssignSelect.value, registrarToCover = registrarToCoverSelect.value, date = coverDate.value;
+            if (!selectedShift || !coveringRegistrar || !date || selectedShift.includes('No shifts')) { alert("Please select a date, a shift, and a covering registrar."); return; }
+            if (!selectedShift.includes('[Empty]') && !registrarToCover) { alert("This shift is filled. Please select the registrar to be covered."); return; }
+            const [shiftPart, _] = selectedShift.split(':'), [session, role] = shiftPart.split(' '), dateStr = formatDateForJson(date);
+            if (isOnLeave(coveringRegistrar, date, registrarsData)) { alert(`Error: ${coveringRegistrar} is on leave on ${dateStr}. Assignment aborted.`); return; }
             const clash = checkAdditionalSessionClash(coveringRegistrar, dateStr, session, rotaData);
-            if(clash) {
-                if(!confirm(`Warning: ${coveringRegistrar} has an additional session on this day. Do you wish to proceed?`)){
-                    alert("Assignment cancelled by user.");
-                    return;
-                }
-            }
-            
-            // 4. Update rota data
-            const newRotaData = JSON.parse(JSON.stringify(rotaData)); // Deep copy
+            if(clash) { if(!confirm(`Warning: ${coveringRegistrar} has an additional session on this day. Do you wish to proceed?`)){ alert("Assignment cancelled by user."); return; } }
+            const newRotaData = JSON.parse(JSON.stringify(rotaData));
             let entry = newRotaData.find(e => e.Date === dateStr);
-            
-            // If date doesn't exist, create it
             if (!entry) {
-                entry = {
-                    "Date": dateStr,
-                    "Shifts": {
-                        "AM": {"Duty": [], "Reporting": [], "Ultrasound": [], "Additional": []},
-                        "PM": {"Duty": [], "Reporting": [], "Ultrasound": [], "Additional": []}
-                    }
-                };
+                entry = { "Date": dateStr, "Shifts": { "AM": {"Duty": [], "Reporting": [], "Ultrasound": [], "Additional": []}, "PM": {"Duty": [], "Reporting": [], "Ultrasound": [], "Additional": []} } };
                 newRotaData.push(entry);
                 newRotaData.sort((a, b) => new Date(a.Date.split('/').reverse().join('-')) - new Date(b.Date.split('/').reverse().join('-')));
             }
-            
             const shiftList = entry.Shifts[session][role];
-            
-            if (selectedShift.includes('[Empty]')) { // Assign to empty shift
-                shiftList.push(coveringRegistrar);
-            } else { // Cover an existing registrar
+            if (selectedShift.includes('[Empty]')) { shiftList.push(coveringRegistrar); } else {
                 const index = shiftList.indexOf(registrarToCover);
-                if (index > -1) {
-                    shiftList.splice(index, 1, coveringRegistrar);
-                } else {
-                    alert(`Error: Could not find ${registrarToCover} on the shift. Please reload.`);
-                    return;
-                }
+                if (index > -1) { shiftList.splice(index, 1, coveringRegistrar); } else { alert(`Error: Could not find ${registrarToCover} on the shift. Please reload.`); return; }
             }
-
-            // 5. Save to GitHub
             loadingOverlay.style.display = 'flex';
-            const commitMessage = selectedShift.includes('[Empty]') 
-                ? `Assign ${coveringRegistrar} to ${session} ${role} on ${dateStr}`
-                : `Cover shift for ${registrarToCover} with ${coveringRegistrar} on ${dateStr}`;
-            
+            const commitMessage = selectedShift.includes('[Empty]') ? `Assign ${coveringRegistrar} to ${session} ${role} on ${dateStr}` : `Cover shift for ${registrarToCover} with ${coveringRegistrar} on ${dateStr}`;
             const result = await githubWriteFile('rota.json', newRotaData, commitMessage);
             loadingOverlay.style.display = 'none';
-
             if (result) {
                 alert("Shift updated successfully!");
-                rotaData = newRotaData; // Refresh local data
+                rotaData = newRotaData;
                 populateShiftsDropdown(date, coverShift, true);
                 updateRegistrarToCoverDropdown();
-            } else {
-                 alert("Failed to save changes to GitHub.");
-            }
+            } else { alert("Failed to save changes to GitHub."); }
         }
-
         async function handleRemoveFromShift() {
-            // 1. Get user input
-            const date = coverDate.value;
-            const selectedShift = coverShift.value;
-            const registrarToRemove = registrarToCoverSelect.value;
-
-            // 2. Validate input
-            if (!date || !selectedShift || selectedShift.includes('[Empty]') || !registrarToRemove) {
-                alert("Please select a filled shift and the registrar you wish to remove.");
-                return;
-            }
-            
-            // 3. Confirmation
-            if (!confirm(`Are you sure you want to remove ${registrarToRemove} from this shift? The shift will become empty.`)) {
-                return;
-            }
-
-            // 4. Parse shift info
-            const [shiftPart, _] = selectedShift.split(':');
-            const [session, role] = shiftPart.split(' ');
-            const dateStr = formatDateForJson(date);
-
-            // 5. Modify data in memory
+            const date = coverDate.value, selectedShift = coverShift.value, registrarToRemove = registrarToCoverSelect.value;
+            if (!date || !selectedShift || selectedShift.includes('[Empty]') || !registrarToRemove) { alert("Please select a filled shift and the registrar you wish to remove."); return; }
+            if (!confirm(`Are you sure you want to remove ${registrarToRemove} from this shift? The shift will become empty.`)) { return; }
+            const [shiftPart, _] = selectedShift.split(':'), [session, role] = shiftPart.split(' '), dateStr = formatDateForJson(date);
             const newRotaData = JSON.parse(JSON.stringify(rotaData));
             const entry = newRotaData.find(e => e.Date === dateStr);
             let updated = false;
-
             if (entry) {
                 const shiftList = entry.Shifts[session][role];
                 const index = shiftList.indexOf(registrarToRemove);
-                if (index > -1) {
-                    shiftList.splice(index, 1); // Remove the registrar
-                    updated = true;
-                }
+                if (index > -1) { shiftList.splice(index, 1); updated = true; }
             }
-
-            if (!updated) {
-                alert("Error: Could not find the registrar on the specified shift. The data may be out of date. Please reload.");
-                return;
-            }
-            
-            // 6. Save to GitHub
+            if (!updated) { alert("Error: Could not find the registrar on the specified shift. The data may be out of date. Please reload."); return; }
             loadingOverlay.style.display = 'flex';
             const commitMessage = `Remove ${registrarToRemove} from ${session} ${role} on ${dateStr}`;
             const result = await githubWriteFile('rota.json', newRotaData, commitMessage);
             loadingOverlay.style.display = 'none';
-
-            // 7. Feedback and UI update
             if (result) {
                 alert(`${registrarToRemove} has been removed from the shift.`);
-                rotaData = newRotaData; // Update local state
+                rotaData = newRotaData;
                 populateShiftsDropdown(date, coverShift, true);
                 updateRegistrarToCoverDropdown();
-            } else {
-                alert("Failed to save the changes to GitHub.");
-            }
+            } else { alert("Failed to save the changes to GitHub."); }
         }
-
 
         // --- Initialization ---
         async function initializeApp() {
+            // ADDED: A check to ensure the token has been received
+            if (!headers.Authorization) {
+                console.error("GitHub Token not received. App cannot start.");
+                loadingOverlay.innerHTML = "<p>Error: Authentication failed. Please reload.</p>";
+                return;
+            }
+
+            loadingOverlay.innerHTML = "<p>Loading Rota Data...</p>";
             try {
                 [rotaData, registrarsData] = await Promise.all([
                     githubReadFile('rota.json'),
@@ -675,11 +500,10 @@
                 ]);
 
                 if (!rotaData || !registrarsData) {
-                    loadingOverlay.innerHTML = "<p>Error: Could not load initial data. Check console for details.</p>";
+                    loadingOverlay.innerHTML = "<p>Error: Could not load initial data. Check console.</p>";
                     return;
                 }
                 
-                // Populate registrar dropdowns
                 const registrarNames = registrarsData.map(r => r.name).sort();
                 registrarToAssignSelect.innerHTML = '';
                 registrarNames.forEach(name => {
@@ -690,8 +514,6 @@
                 });
                 registrarToAssignSelect.disabled = false;
 
-
-                // Setup event listeners
                 swapDate1.addEventListener('change', (e) => populateShiftsDropdown(e.target.value, swapShift1));
                 swapDate2.addEventListener('change', (e) => populateShiftsDropdown(e.target.value, swapShift2));
                 performSwapBtn.addEventListener('click', handleSwap);
@@ -701,8 +523,6 @@
                 performAssignBtn.addEventListener('click', handleCover);
                 performRemoveBtn.addEventListener('click', handleRemoveFromShift);
 
-
-                // Show content
                 loadingOverlay.style.display = 'none';
                 mainContent.style.display = 'block';
 
@@ -712,7 +532,21 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', initializeApp);
+        // REMOVED: The old `document.addEventListener('DOMContentLoaded', initializeApp);`
+        // ADDED: A listener that waits for the token from `index.html`
+        window.addEventListener('message', (event) => {
+            const pat = event.data;
+            if (pat && typeof pat === 'string') {
+                console.log("Token received for rota editor.");
+                // Set up the headers object for all future API calls
+                headers = {
+                    "Authorization": `token ${pat}`,
+                    "Accept": "application/vnd.github.v3+json"
+                };
+                // Now, initialize the application
+                initializeApp();
+            }
+        }, false);
     </script>
 </body>
 </html>
