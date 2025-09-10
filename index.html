@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rota and Leave Management</title>
-    <link href="https://cdn.tailwindcss.com" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Custom styles for a smooth experience */
         body {
@@ -15,39 +15,96 @@
             color: #4f46e5;
             background-color: #eef2ff;
         }
-        /* The fixed-height style below is no longer needed because 
-           flexbox will now control the iframe's height automatically. */
-        /* #content-frame {
-            height: calc(100vh - 100px);
-        }
-        */
     </style>
 </head>
 <body class="bg-gray-100 flex flex-col h-full">
 
-    <div class="flex-shrink-0">
-        <div class="container mx-auto p-4">
-            <header class="text-center mb-6">
-                <h1 class="text-3xl font-bold text-gray-800">Staff Management Portal</h1>
-                <p class="text-gray-600">Switch between the Rota Editor and Leave Management pages.</p>
-            </header>
-
-            <div class="flex justify-center border-b border-gray-200 mb-4">
-                <button id="rota-tab" class="tab-button py-3 px-6 text-lg font-medium text-gray-500 border-b-2 border-transparent hover:border-gray-300 hover:text-gray-700 transition duration-150 ease-in-out focus:outline-none" onclick="openTab('rota.html', this)">
-                    Rota Editor
+    <div id="password-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm">
+            <h2 class="text-2xl font-bold mb-4 text-center text-gray-800">Enter Password</h2>
+            <p class="text-center text-gray-600 mb-6">Please enter the password to access the portal.</p>
+            <form id="password-form">
+                <input type="password" id="password-input" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Password">
+                <p id="error-message" class="text-red-500 text-sm mt-2 text-center h-4"></p>
+                <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-md hover:bg-indigo-700 transition duration-300 mt-4">
+                    Unlock
                 </button>
-                <button id="leave-tab" class="tab-button py-3 px-6 text-lg font-medium text-gray-500 border-b-2 border-transparent hover:border-gray-300 hover:text-gray-700 transition duration-150 ease-in-out focus:outline-none" onclick="openTab('leave.html', this)">
-                    Leave Management
-                </button>
-            </div>
+            </form>
         </div>
     </div>
 
-    <div class="flex-grow bg-white shadow-md">
-        <iframe id="content-frame" src="" class="w-full h-full border-0" title="Embedded Content"></iframe>
+    <div id="main-content" class="hidden h-full flex flex-col">
+        <div class="flex-shrink-0">
+            <div class="container mx-auto p-4">
+                <header class="text-center mb-6">
+                    <h1 class="text-3xl font-bold text-gray-800">Staff Management Portal</h1>
+                    <p class="text-gray-600">Switch between the Rota Editor and Leave Management pages.</p>
+                </header>
+
+                <div class="flex justify-center border-b border-gray-200 mb-4">
+                    <button id="rota-tab" class="tab-button py-3 px-6 text-lg font-medium text-gray-500 border-b-2 border-transparent hover:border-gray-300 hover:text-gray-700 transition duration-150 ease-in-out focus:outline-none" onclick="openTab('rota.html', this)">
+                        Rota Editor
+                    </button>
+                    <button id="leave-tab" class="tab-button py-3 px-6 text-lg font-medium text-gray-500 border-b-2 border-transparent hover:border-gray-300 hover:text-gray-700 transition duration-150 ease-in-out focus:outline-none" onclick="openTab('leave.html', this)">
+                        Leave Management
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-grow bg-white shadow-md">
+            <iframe id="content-frame" src="" class="w-full h-full border-0" title="Embedded Content"></iframe>
+        </div>
     </div>
 
     <script>
+        // --- Password Protection Logic ---
+        const correctPassword = 'password123'; // ⚠️ Change this to a secure password!
+        const passwordModal = document.getElementById('password-modal');
+        const passwordForm = document.getElementById('password-form');
+        const passwordInput = document.getElementById('password-input');
+        const errorMessage = document.getElementById('error-message');
+        const mainContent = document.getElementById('main-content');
+
+        passwordForm.addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent page reload
+            const enteredPassword = passwordInput.value;
+
+            if (enteredPassword === correctPassword) {
+                // On correct password, hide modal and show main content
+                passwordModal.classList.add('hidden');
+                mainContent.classList.remove('hidden');
+                
+                // Load the default tab view
+                loadDefaultTab();
+            } else {
+                // On incorrect password, show error and clear input
+                errorMessage.textContent = 'Incorrect password. Please try again.';
+                passwordInput.value = '';
+                // Shake animation for feedback
+                passwordModal.querySelector('div').classList.add('animate-shake');
+                setTimeout(() => {
+                    passwordModal.querySelector('div').classList.remove('animate-shake');
+                }, 500);
+            }
+        });
+        
+        // Add a simple shake animation for incorrect password feedback
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @keyframes shake {
+                0%, 100% { transform: translateX(0); }
+                10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+                20%, 40%, 60%, 80% { transform: translateX(5px); }
+            }
+            .animate-shake {
+                animation: shake 0.5s ease-in-out;
+            }
+        `;
+        document.head.appendChild(style);
+
+
+        // --- Tab Management Logic ---
         const contentFrame = document.getElementById('content-frame');
         const tabs = document.querySelectorAll('.tab-button');
 
@@ -67,11 +124,18 @@
             clickedTab.classList.add('active');
         }
 
-        // Load the default tab when the page loads
-        window.addEventListener('DOMContentLoaded', () => {
+        // Function to load the default tab
+        function loadDefaultTab() {
             const defaultTab = document.getElementById('rota-tab');
-            openTab('rota.html', defaultTab);
-        });
+            // Check if default tab exists to avoid errors
+            if (defaultTab) {
+               openTab('rota.html', defaultTab);
+            }
+        }
+        
+        // Note: The DOMContentLoaded event listener is removed from here.
+        // The default tab is now loaded via the loadDefaultTab() function 
+        // after the password has been successfully entered.
     </script>
 
 </body>
