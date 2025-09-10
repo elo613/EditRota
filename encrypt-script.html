@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Token Encryption Utility</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 2em; line-height: 1.6; }
+        input, button { padding: 10px; font-size: 1em; margin: 5px 0; width: 100%; box-sizing: border-box; }
+        pre { background-color: #f0f0f0; padding: 1em; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <h1>GitHub Token Encryption Utility</h1>
+    <p>Use this page ONCE to encrypt your token. This should be run locally in your browser.</p>
+
+    <label for="pat">GitHub PAT:</label>
+    <input type="text" id="pat" placeholder="Enter your ghp_... token">
+
+    <label for="password">Password (same one used for the portal):</label>
+    <input type="password" id="password" placeholder="Enter the password">
+
+    <button onclick="encryptToken()">Encrypt Token</button>
+
+    <h2>Output:</h2>
+    <p>Save the following JSON content into a new file named <code>encrypted-token.json</code></p>
+    <pre id="output">Click the button to generate the encrypted data.</pre>
+
+    <script>
+        function encryptToken() {
+            const pat = document.getElementById('pat').value;
+            const password = document.getElementById('password').value;
+            const output = document.getElementById('output');
+
+            if (!pat || !password) {
+                output.textContent = 'Please provide both a PAT and a password.';
+                return;
+            }
+
+            // Encrypt the token using AES
+            const encrypted = CryptoJS.AES.encrypt(pat, password).toString();
+
+            const result = {
+                encryptedToken: encrypted
+            };
+
+            output.textContent = JSON.stringify(result, null, 4);
+        }
+    </script>
+</body>
+</html>
