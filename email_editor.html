@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Email List</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: #fff;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0056b3;
+            border-bottom: 2px solid #0056b3;
+            padding-bottom: 10px;
+            text-align: center;
+        }
+        .email-list {
+            list-style: none;
+            padding: 0;
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .email-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .email-item:last-child {
+            border-bottom: none;
+        }
+        .email-item:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .form-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ccc;
+        }
+        input[type="email"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button.delete {
+            background-color: #dc3545;
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+        button.delete:hover {
+            background-color: #c82333;
+        }
+        .add-form {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        #save-button {
+            width: 100%;
+            margin-top: 20px;
+            background-color: #28a745;
+        }
+        #save-button:hover {
+            background-color: #218838;
+        }
+        .loader {
+            border: 5px solid #f3f3f3; border-top: 5px solid #3498db;
+            border-radius: 50%; width: 50px; height: 50px;
+            animation: spin 1s linear infinite;
+            position: absolute; top: 50%; left: 50%;
+            margin-left: -25px; margin-top: -25px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #loader-overlay {
+            position: fixed; width: 100%; height: 100%;
+            top: 0; left: 0; background: rgba(255, 255, 255, 0.8);
+            z-index: 2000; display: flex; justify-content: center; align-items: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader-overlay">
+        <div class="loader"></div>
+        <p style="margin-top: 70px;">Waiting for authentication...</p>
+    </div>
+
+    <div class="container" style="display: none;">
+        <h1>Edit Email List</h1>
+        <ul id="email-list" class="email-list">
+            </ul>
+
+        <div class="form-section">
+            <form id="add-email-form">
+                <label for="new-email">Add New Email Address:</label>
+                <div class="add-form">
+                    <input type="email" id="new-email" placeholder="example@domain.com" required style="flex-grow: 1;">
+                    <button type="submit">Add</button>
+                </div>
+            </form>
+            <button id="save-button">Save Changes to GitHub</button>
+        </div>
+    </div>
+
+<script>
+/******************************************************************************
+ * GITHUB CONFIGURATION & GLOBAL STATE
+ ******************************************************************************/
+const GITHUB_CONFIG = {
+    USERNAME: "elo613",
+    REPO_NAME: "radrota",
+    BRANCH: "main",
+    FOLDER_PATH: "json_files"
+};
+const FILE_NAME = "email_list.json";
+
+let emailListData = { recipient_list: [] };
+let fileSHA = null;
+let headers = {}; // To be populated by postMessage
+
+// DOM Elements
+const loaderOverlay = document.getElementById('loader-overlay');
+const mainContainer = document.querySelector('.container');
+const emailListElement = document.getElementById('email-list');
+const addEmailForm = document.getElementById('add-email-form');
+const newEmailInput = document.getElementById('new-email');
+const saveButton = document.getElementById('save-button');
+
+/******************************************************************************
+ * GITHUB API FUNCTIONS
+ ******************************************************************************/
+const API_BASE_URL = `https://api.github.com/repos/${GITHUB_CONFIG.USERNAME}/${GITHUB_CONFIG.REPO_NAME}/contents`;
+
+async function githubReadFile(fileName) {
+    const path = `${GITHUB_CONFIG.FOLDER_PATH}/${fileName}`;
+    const url = `${API_BASE_URL}/${path}?ref=${GITHUB_CONFIG.BRANCH}`;
+    try {
+        const response = await fetch(url, { headers });
+        if (!response.ok) throw new Error(`Failed to read ${fileName}: ${response.status} ${response.statusText}`);
+        const data = await response.json();
+        fileSHA = data.sha; // Store the SHA for writing later
+        return JSON.parse(atob(data.content));
+    } catch (error) {
+        alert(`Error fetching ${fileName} from GitHub:\n${error.message}`);
+        throw error;
+    }
+}
+
+async function githubWriteFile(fileName, content) {
+    const path = `${GITHUB_CONFIG.FOLDER_PATH}/${fileName}`;
+    const url = `${API_BASE_URL}/${path}`;
+    const contentB64 = btoa(JSON.stringify(content, null, 2));
+
+    const payload = {
+        message: `Update ${fileName} via web app`,
+        content: contentB64,
+        branch: GITHUB_CONFIG.BRANCH,
+        sha: fileSHA
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'PUT',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to write to ${fileName}: ${response.status} ${response.statusText}\n${errorData.message}`);
+        }
+        const data = await response.json();
+        fileSHA = data.content.sha; // Update SHA to the new commit
+        alert(`${fileName} saved successfully!`);
+    } catch (error) {
+        alert(`Error saving ${fileName} to GitHub:\n${error.message}`);
+        throw error;
+    }
+}
+
+/******************************************************************************
+ * APPLICATION LOGIC
+ ******************************************************************************/
+function showLoader(show, text = '') {
+    loaderOverlay.style.display = show ? 'flex' : 'none';
+    const p = loaderOverlay.querySelector('p');
+    if (p) p.textContent = text;
+}
+
+function renderEmailList() {
+    emailListElement.innerHTML = '';
+    const sortedList = [...emailListData.recipient_list].sort((a, b) => a.localeCompare(b));
+    
+    sortedList.forEach(email => {
+        const li = document.createElement('li');
+        li.className = 'email-item';
+        
+        const span = document.createElement('span');
+        span.textContent = email;
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Remove';
+        deleteBtn.className = 'delete';
+        deleteBtn.onclick = () => handleRemoveEmail(email);
+        
+        li.appendChild(span);
+        li.appendChild(deleteBtn);
+        emailListElement.appendChild(li);
+    });
+}
+
+function handleAddEmail(event) {
+    event.preventDefault();
+    const email = newEmailInput.value.trim().toLowerCase();
+    
+    if (email && !emailListData.recipient_list.includes(email)) {
+        emailListData.recipient_list.push(email);
+        renderEmailList();
+        newEmailInput.value = '';
+    } else if (emailListData.recipient_list.includes(email)) {
+        alert("This email address is already in the list.");
+    }
+}
+
+function handleRemoveEmail(emailToRemove) {
+    if (confirm(`Are you sure you want to remove ${emailToRemove}?`)) {
+        emailListData.recipient_list = emailListData.recipient_list.filter(email => email !== emailToRemove);
+        renderEmailList();
+    }
+}
+
+async function handleSaveChanges() {
+    showLoader(true, 'Saving...');
+    try {
+        await githubWriteFile(FILE_NAME, emailListData);
+    } catch (error) {
+        console.error("Save failed:", error);
+    } finally {
+        showLoader(false);
+    }
+}
+
+/******************************************************************************
+ * INITIALIZATION
+ ******************************************************************************/
+async function initializeApp() {
+    if (!headers.Authorization) {
+        showLoader(true, "Authentication failed. Please reload the portal.");
+        console.error("GitHub Token not received.");
+        return;
+    }
+
+    showLoader(true, 'Loading email list...');
+    try {
+        emailListData = await githubReadFile(FILE_NAME);
+        if (!emailListData.recipient_list) {
+            emailListData.recipient_list = []; // Ensure the array exists
+        }
+        renderEmailList();
+        
+        // Setup event listeners
+        addEmailForm.addEventListener('submit', handleAddEmail);
+        saveButton.addEventListener('click', handleSaveChanges);
+
+        mainContainer.style.display = 'block';
+    } catch (error) {
+        console.error("Initialization failed.", error);
+    } finally {
+        showLoader(false);
+    }
+}
+
+window.addEventListener('message', (event) => {
+    const pat = event.data;
+    if (pat && typeof pat === 'string') {
+        console.log("Token received for email editor.");
+        headers = {
+            "Authorization": `token ${pat}`,
+            "Accept": "application/vnd.github.v3+json"
+        };
+        initializeApp();
+    }
+}, false);
+</script>
+</body>
+</html>
