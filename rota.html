@@ -26,7 +26,7 @@
         }
         main {
             width: 100%;
-            max-width: 900px;
+            max-width: 1200px; /* Increased max-width for the new tab */
             background: white;
             padding: 2rem;
             border-radius: 8px;
@@ -78,7 +78,7 @@
             margin-bottom: 0.5rem;
             font-weight: 600;
         }
-        input[type="date"], select {
+        input[type="date"], select, textarea {
             width: 100%;
             padding: 0.75rem;
             border-radius: 4px;
@@ -95,20 +95,14 @@
             font-weight: 600;
             transition: background-color 0.2s;
         }
-        .btn-primary {
-            background-color: var(--primary-color);
-            color: white;
-        }
-        .btn-primary:hover {
-            opacity: 0.9;
-        }
-        .btn-danger {
-            background-color: var(--danger-color);
-            color: white;
-        }
-        .btn-danger:hover {
-            opacity: 0.9;
-        }
+        .btn-primary { background-color: var(--primary-color); color: white; }
+        .btn-success { background-color: var(--success-color); color: white; }
+        .btn-danger { background-color: var(--danger-color); color: white; }
+        .btn-secondary { background-color: var(--secondary-color); color: white; }
+
+        button:hover:not(:disabled) { opacity: 0.9; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+
         .button-container {
             text-align: center;
             margin-top: 1.5rem;
@@ -117,18 +111,33 @@
             gap: 1rem;
         }
         .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(255, 255, 255, 0.8);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 1.5rem;
-            z-index: 1000;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 1.5rem; z-index: 1000;
         }
+
+        /* --- Styles for Manual Session Tab --- */
+        .manual-session-container {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1rem;
+        }
+        .manual-form-container { flex: 1; max-width: 400px; }
+        .manual-table-container { flex: 2; max-height: 60vh; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; }
+        .manual-form-section { background: var(--light-gray); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: 6px; }
+        .radio-group { display: flex; gap: 1.5rem; margin-top: 0.5rem; }
+        .radio-group label { font-weight: normal; }
+        textarea { resize: vertical; min-height: 80px; }
+        .manual-button-group { margin-top: 1.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+        .manual-button-group button, .manual-form-container .btn-primary, .manual-form-container .btn-secondary { width: 100%; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { background-color: var(--light-gray); position: sticky; top: 0; }
+        tbody tr { cursor: pointer; transition: background-color 0.15s; }
+        tbody tr:hover { background-color: #e9ecef; }
+        tbody tr.selected { background-color: var(--primary-color) !important; color: white; }
+
     </style>
 </head>
 <body>
@@ -143,6 +152,7 @@
         <div class="tabs">
             <button class="tab-button active" onclick="showTab('swap')">Swap Shifts</button>
             <button class="tab-button" onclick="showTab('cover')">Cover/Assign Shifts</button>
+            <button class="tab-button" onclick="showTab('manual')">Add Other Session</button>
         </div>
 
         <div id="swap-tab" class="tab-content active">
@@ -154,12 +164,9 @@
                 </div>
                 <div class="form-group">
                     <label for="swap-shift-1">Select First Shift & Registrar</label>
-                    <select id="swap-shift-1" disabled>
-                        <option>Select a date first</option>
-                    </select>
+                    <select id="swap-shift-1" disabled><option>Select a date first</option></select>
                 </div>
             </div>
-
             <div class="form-section">
                 <div class="form-group">
                     <label for="swap-date-2">Select Second Date</label>
@@ -167,12 +174,9 @@
                 </div>
                 <div class="form-group">
                     <label for="swap-shift-2">Select Second Shift & Registrar</label>
-                    <select id="swap-shift-2" disabled>
-                        <option>Select a date first</option>
-                    </select>
+                    <select id="swap-shift-2" disabled><option>Select a date first</option></select>
                 </div>
             </div>
-
             <div class="button-container">
                 <button id="perform-swap-btn" class="btn-primary">Swap Shifts</button>
             </div>
@@ -187,28 +191,74 @@
                 </div>
                 <div class="form-group">
                     <label for="cover-shift">Select Shift</label>
-                    <select id="cover-shift" disabled>
-                        <option>Select a date first</option>
-                    </select>
+                    <select id="cover-shift" disabled><option>Select a date first</option></select>
                 </div>
                  <div class="form-group" id="registrar-to-cover-group" style="display:none;">
                     <label for="cover-registrar-to-cover">Registrar to be Covered / Removed</label>
                     <select id="cover-registrar-to-cover"></select>
                 </div>
             </div>
-
             <div class="form-section">
                 <div class="form-group">
                     <label for="cover-registrar-to-assign">Select Registrar to Assign / Cover</label>
-                    <select id="cover-registrar-to-assign" disabled>
-                        <option>Loading registrars...</option>
-                    </select>
+                    <select id="cover-registrar-to-assign" disabled><option>Loading registrars...</option></select>
                 </div>
             </div>
-
             <div class="button-container">
                 <button id="perform-assign-btn" class="btn-primary">Assign / Cover Shift</button>
                 <button id="perform-remove-btn" class="btn-danger">Remove from Shift</button>
+            </div>
+        </div>
+
+        <div id="manual-tab" class="tab-content">
+             <div class="manual-session-container">
+                <div class="manual-form-container">
+                    <h2>Add / Edit Session</h2>
+                    <div class="manual-form-section">
+                        <div class="form-group">
+                            <label for="manual-registrar-select">Registrar</label>
+                            <select id="manual-registrar-select"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="manual-session-date">Date</label>
+                            <input type="date" id="manual-session-date">
+                        </div>
+                        <div class="form-group">
+                            <label>Session</label>
+                            <div class="radio-group">
+                               <label><input type="radio" name="manual-session-type" value="AM" checked> AM</label>
+                               <label><input type="radio" name="manual-session-type" value="PM"> PM</label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="manual-session-details">Details</label>
+                            <textarea id="manual-session-details" rows="4"></textarea>
+                        </div>
+                        
+                        <button id="manual-add-btn" class="btn-primary">Add Session</button>
+                        <div class="manual-button-group">
+                            <button id="manual-update-btn" class="btn-success" disabled>Update Selected</button>
+                            <button id="manual-delete-btn" class="btn-danger" disabled>Delete Selected</button>
+                        </div>
+                         <button id="manual-clear-btn" class="btn-secondary" style="margin-top: 0.5rem;">Clear Selection</button>
+                    </div>
+                </div>
+                
+                <div class="manual-table-container">
+                    <h2>Existing Additional Sessions</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Registrar</th>
+                                <th>Date</th>
+                                <th>Session</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="manual-sessions-table-body">
+                            </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -216,9 +266,6 @@
 
     <script>
         // --- GitHub Configuration ---
-        // REMOVED: Hardcoded token and related variables
-        
-        // ADDED: Variables to be populated by the parent window
         let headers = {};
         const GITHUB_USERNAME = "elo613";
         const REPO_NAME = "radrota";
@@ -228,10 +275,12 @@
         // --- Global State ---
         let rotaData = [];
         let registrarsData = [];
+        let selectedManualSession = null;
 
         // --- DOM Elements ---
         const loadingOverlay = document.getElementById('loading-overlay');
         const mainContent = document.querySelector('main');
+        // Original Tab Elements
         const swapDate1 = document.getElementById('swap-date-1');
         const swapShift1 = document.getElementById('swap-shift-1');
         const swapDate2 = document.getElementById('swap-date-2');
@@ -244,54 +293,39 @@
         const registrarToAssignSelect = document.getElementById('cover-registrar-to-assign');
         const performAssignBtn = document.getElementById('perform-assign-btn');
         const performRemoveBtn = document.getElementById('perform-remove-btn');
-
-        /******************************************************************************
-         * THE REST OF YOUR APPLICATION LOGIC
-         * (No changes needed in the functions below)
-         ******************************************************************************/
-        // githubReadFile...
-        // githubWriteFile...
-        // isOnLeave...
-        // checkAdditionalSessionClash...
-        // formatDateForJson...
-        // parseShiftString...
-        // showTab...
-        // populateShiftsDropdown...
-        // updateRegistrarToCoverDropdown...
-        // handleSwap...
-        // handleCover...
-        // handleRemoveFromShift...
-        // ... (All your existing functions remain here without changes)
-
+        // New Manual Session Tab Elements
+        const manualRegistrarSelect = document.getElementById('manual-registrar-select');
+        const manualSessionDate = document.getElementById('manual-session-date');
+        const manualSessionDetails = document.getElementById('manual-session-details');
+        const manualAddBtn = document.getElementById('manual-add-btn');
+        const manualUpdateBtn = document.getElementById('manual-update-btn');
+        const manualDeleteBtn = document.getElementById('manual-delete-btn');
+        const manualClearBtn = document.getElementById('manual-clear-btn');
+        const manualTableBody = document.getElementById('manual-sessions-table-body');
+        
+        // --- GitHub API & Helper Functions ---
         async function githubReadFile(path) {
-            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${FOLDER_PATH}/${path}?ref=${BRANCH}`;
-            try {
-                const response = await fetch(url, { headers });
-                if (!response.ok) { throw new Error(`GitHub API Error: ${response.status} ${response.statusText}`); }
-                const data = await response.json();
-                return JSON.parse(atob(data.content));
-            } catch (error) {
-                alert(`Failed to read ${path} from GitHub: ${error.message}`);
-                return null;
-            }
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${FOLDER_PATH}/${path}?ref=${BRANCH}&t=${new Date().getTime()}`;
+            const response = await fetch(url, { headers });
+            if (!response.ok) throw new Error(`GitHub API Error: ${response.status} ${response.statusText}`);
+            const data = await response.json();
+            return JSON.parse(atob(data.content));
         }
+
         async function githubWriteFile(path, content, commitMessage) {
             const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${FOLDER_PATH}/${path}`;
-            try {
-                const getResponse = await fetch(`${url}?ref=${BRANCH}`, { headers });
-                if (!getResponse.ok) throw new Error(`Could not fetch file SHA: ${getResponse.statusText}`);
-                const fileData = await getResponse.json();
-                const sha = fileData.sha;
-                const contentB64 = btoa(JSON.stringify(content, null, 4));
-                const body = { message: commitMessage, content: contentB64, sha: sha, branch: BRANCH };
-                const putResponse = await fetch(url, { method: 'PUT', headers, body: JSON.stringify(body) });
-                if (!putResponse.ok) { throw new Error(`GitHub API Error on write: ${putResponse.status} ${putResponse.statusText}`); }
-                return await putResponse.json();
-            } catch (error) {
-                alert(`Failed to write ${path} to GitHub: ${error.message}`);
-                return null;
-            }
+            const getResponse = await fetch(`${url}?ref=${BRANCH}`, { headers });
+            if (!getResponse.ok && getResponse.status !== 404) throw new Error(`Could not fetch file SHA: ${getResponse.statusText}`);
+            const fileData = getResponse.status === 404 ? {} : await getResponse.json();
+            const sha = fileData.sha;
+            const contentB64 = btoa(JSON.stringify(content, null, 4));
+            const body = { message: commitMessage, content: contentB64, branch: BRANCH };
+            if (sha) body.sha = sha;
+            const putResponse = await fetch(url, { method: 'PUT', headers, body: JSON.stringify(body) });
+            if (!putResponse.ok) throw new Error(`GitHub API Error on write: ${putResponse.status} ${putResponse.statusText}`);
+            return await putResponse.json();
         }
+
         function isOnLeave(registrarName, date, regData) {
             if (!date) return false;
             const targetDate = new Date(date);
@@ -300,51 +334,64 @@
             if (!registrar || !registrar.leave_records) return false;
             for (const leave of registrar.leave_records) {
                 try {
-                    const startDate = new Date(leave.start);
-                    const endDate = new Date(leave.end);
+                    const startDate = new Date(leave.start.replace(/(\d+)(st|nd|rd|th)/, "$1"));
+                    const endDate = new Date(leave.end.replace(/(\d+)(st|nd|rd|th)/, "$1"));
                     startDate.setHours(0, 0, 0, 0);
                     endDate.setHours(0, 0, 0, 0);
-                    if (targetDate >= startDate && targetDate <= endDate) { return true; }
+                    if (targetDate >= startDate && targetDate <= endDate) return true;
                 } catch (e) { console.error("Error parsing leave date:", leave); }
             }
             return false;
         }
+
         function checkAdditionalSessionClash(registrarName, dateStr, session, currentRota) {
-             const entry = currentRota.find(e => e.Date === dateStr);
-             if (!entry) return null;
-             const additionalSessions = entry.Shifts?.[session]?.Additional || [];
-             const clash = additionalSessions.find(sess => sess[0] === registrarName);
-             return clash ? clash : null;
+            const entry = currentRota.find(e => e.Date === dateStr);
+            if (!entry) return null;
+            const additionalSessions = entry.Shifts?.[session]?.Additional || [];
+            const clash = additionalSessions.find(sess => sess[0] === registrarName);
+            return clash ? clash : null;
         }
+
         function formatDateForJson(date) {
             const d = new Date(date);
+            d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); // Adjust for timezone
             const day = String(d.getDate()).padStart(2, '0');
             const month = String(d.getMonth() + 1).padStart(2, '0');
             const year = d.getFullYear();
             return `${day}/${month}/${year}`;
         }
-        function parseShiftString(shiftString) {
-             if (!shiftString || !shiftString.includes(':')) return null;
-             const [shiftPart, registrarPart] = shiftString.split(': ');
-             const [session, role] = shiftPart.split(' ');
-             return { session, role, registrar: registrarPart.trim() };
+        
+        function formatDateForInput(dateStr) {
+            if (!dateStr || !dateStr.includes('/')) return '';
+            const [day, month, year] = dateStr.split('/');
+            return `${year}-${month}-${day}`;
         }
+
+        function parseShiftString(shiftString) {
+            if (!shiftString || !shiftString.includes(':')) return null;
+            const [shiftPart, registrarPart] = shiftString.split(': ');
+            const [session, role] = shiftPart.split(' ');
+            return { session, role, registrar: registrarPart.trim() };
+        }
+
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             document.getElementById(`${tabName}-tab`).classList.add('active');
             document.querySelector(`.tab-button[onclick="showTab('${tabName}')"]`).classList.add('active');
         }
+
+        // --- ORIGINAL TABS LOGIC ---
         function populateShiftsDropdown(date, selectElement, includeEmpty = false) {
-            const dateStr = formatDateForJson(date);
+            const dateStr = formatDateForJson(new Date(date));
             selectElement.innerHTML = '';
             selectElement.disabled = false;
             const rotaEntry = rotaData.find(entry => entry.Date === dateStr);
             let shiftsFound = false;
             const shiftTypes = ["Duty", "Reporting", "Ultrasound"];
             const sessions = ["AM", "PM"];
-        
-            if (rotaEntry && rotaEntry.Shifts) { // Check if rotaEntry and Shifts exist
+            
+            if (rotaEntry && rotaEntry.Shifts) {
                 sessions.forEach(session => {
                     shiftTypes.forEach(role => {
                         const registrars = rotaEntry.Shifts[session]?.[role] || [];
@@ -366,48 +413,43 @@
                     });
                 });
             }
-        
-        
-            // --- ADD THIS SECTION to automatically select the first AM Duty shift ---
+
             for (let i = 0; i < selectElement.options.length; i++) {
-                // Check if the option text starts with "AM Duty"
                 if (selectElement.options[i].value.startsWith('AM Duty:')) {
-                    selectElement.selectedIndex = i; // Select this option
-                    break; // Stop searching once the first one is found
+                    selectElement.selectedIndex = i;
+                    break;
                 }
             }
-            // --- END OF NEW SECTION ---
-        
-        
+
             if (!shiftsFound) {
                 selectElement.innerHTML = '<option>No shifts found for this date</option>';
                 selectElement.disabled = true;
             }
-        
-            // Manually trigger the change event if the element is the coverShift dropdown
-            // This ensures the "Registrar to be Covered" dropdown updates automatically
+
             if (selectElement.id === 'cover-shift') {
                 selectElement.dispatchEvent(new Event('change'));
             }
         }
+
         function updateRegistrarToCoverDropdown() {
             const selectedShift = coverShift.value;
             if (!selectedShift || selectedShift.includes('[Empty]')) {
                 registrarToCoverGroup.style.display = 'none';
                 registrarToCoverSelect.innerHTML = '';
             } else {
-                 const registrarsString = selectedShift.split(': ')[1];
-                 const registrars = registrarsString.split(',').map(r => r.trim());
-                 registrarToCoverSelect.innerHTML = '';
-                 registrars.forEach(reg => {
+                const registrarsString = selectedShift.split(': ')[1];
+                const registrars = registrarsString.split(',').map(r => r.trim());
+                registrarToCoverSelect.innerHTML = '';
+                registrars.forEach(reg => {
                     const option = document.createElement('option');
                     option.value = reg;
                     option.textContent = reg;
                     registrarToCoverSelect.appendChild(option);
-                 });
-                 registrarToCoverGroup.style.display = 'block';
+                });
+                registrarToCoverGroup.style.display = 'block';
             }
         }
+
         async function handleSwap() {
             const shift1Str = swapShift1.value, shift2Str = swapShift2.value, date1 = swapDate1.value, date2 = swapDate2.value;
             if (!shift1Str || !shift2Str || !date1 || !date2 || shift1Str.includes('No shifts') || shift2Str.includes('No shifts')) { alert("Please select two valid shifts to swap."); return; }
@@ -433,9 +475,9 @@
                 if (index > -1) { shiftList.splice(index, 1, parsed2.registrar); updated1 = true; }
             }
             if(entry2) {
-                 const shiftList = entry2.Shifts[parsed2.session][parsed2.role];
-                 const index = shiftList.indexOf(parsed2.registrar);
-                 if (index > -1) { shiftList.splice(index, 1, parsed1.registrar); updated2 = true; }
+                const shiftList = entry2.Shifts[parsed2.session][parsed2.role];
+                const index = shiftList.indexOf(parsed2.registrar);
+                if (index > -1) { shiftList.splice(index, 1, parsed1.registrar); updated2 = true; }
             }
             if (!updated1 || !updated2) { alert("Error: Could not find one or both registrars on their specified shifts. The rota might have been updated. Please reload."); return; }
             loadingOverlay.style.display = 'flex';
@@ -448,6 +490,7 @@
                 populateShiftsDropdown(date2, swapShift2);
             } else { alert("Failed to save changes to GitHub."); }
         }
+
         async function handleCover() {
             const selectedShift = coverShift.value, coveringRegistrar = registrarToAssignSelect.value, registrarToCover = registrarToCoverSelect.value, date = coverDate.value;
             if (!selectedShift || !coveringRegistrar || !date || selectedShift.includes('No shifts')) { alert("Please select a date, a shift, and a covering registrar."); return; }
@@ -479,6 +522,7 @@
                 updateRegistrarToCoverDropdown();
             } else { alert("Failed to save changes to GitHub."); }
         }
+
         async function handleRemoveFromShift() {
             const date = coverDate.value, selectedShift = coverShift.value, registrarToRemove = registrarToCoverSelect.value;
             if (!date || !selectedShift || selectedShift.includes('[Empty]') || !registrarToRemove) { alert("Please select a filled shift and the registrar you wish to remove."); return; }
@@ -505,15 +549,170 @@
             } else { alert("Failed to save the changes to GitHub."); }
         }
 
+        // --- NEW MANUAL SESSION TAB LOGIC ---
+        function checkRegularShiftClash(registrarName, dateStr, sessionType) {
+            const entry = rotaData.find(e => e.Date === dateStr);
+            if (!entry) return null;
+            for (const role of ["Duty", "Reporting", "Ultrasound"]) {
+                if (entry.Shifts?.[sessionType]?.[role]?.includes(registrarName)) {
+                    return role;
+                }
+            }
+            return null;
+        }
+
+        function populateManualSessionsTable() {
+            manualTableBody.innerHTML = '';
+            rotaData.sort((a, b) => new Date(a.Date.split('/').reverse().join('-')) - new Date(b.Date.split('/').reverse().join('-')));
+            rotaData.forEach(entry => {
+                ["AM", "PM"].forEach(sessionType => {
+                    const sessions = entry.Shifts?.[sessionType]?.Additional || [];
+                    sessions.forEach(session => {
+                        const [name, , , details] = session;
+                        const row = document.createElement('tr');
+                        row.innerHTML = `<td>${name}</td><td>${entry.Date}</td><td>${sessionType}</td><td>${details}</td>`;
+                        row.addEventListener('click', () => handleManualRowSelect(row, { name, date: entry.Date, sessionType, details }));
+                        manualTableBody.appendChild(row);
+                    });
+                });
+            });
+        }
+        
+        function handleManualRowSelect(rowElement, sessionData) {
+            document.querySelectorAll('#manual-sessions-table-body tr').forEach(row => row.classList.remove('selected'));
+            rowElement.classList.add('selected');
+            selectedManualSession = sessionData;
+            manualRegistrarSelect.value = sessionData.name;
+            manualSessionDate.value = formatDateForInput(sessionData.date);
+            document.querySelector(`input[name="manual-session-type"][value="${sessionData.sessionType}"]`).checked = true;
+            manualSessionDetails.value = sessionData.details;
+            manualUpdateBtn.disabled = false;
+            manualDeleteBtn.disabled = false;
+        }
+
+        function clearManualForm() {
+            document.querySelectorAll('#manual-sessions-table-body tr').forEach(row => row.classList.remove('selected'));
+            selectedManualSession = null;
+            manualRegistrarSelect.selectedIndex = 0;
+            manualSessionDate.value = '';
+            document.querySelector('input[name="manual-session-type"][value="AM"]').checked = true;
+            manualSessionDetails.value = '';
+            manualUpdateBtn.disabled = true;
+            manualDeleteBtn.disabled = true;
+        }
+
+        async function performManualSave(updatedRotaData, commitMessage) {
+            loadingOverlay.innerHTML = "<p>Saving changes to GitHub...</p>";
+            loadingOverlay.style.display = 'flex';
+            try {
+                await githubWriteFile('rota.json', updatedRotaData, commitMessage);
+                rotaData = updatedRotaData;
+                populateManualSessionsTable();
+                clearManualForm();
+                alert("Success! The rota has been updated.");
+            } catch (error) {
+                console.error("Save failed:", error);
+                alert(`Failed to save changes: ${error.message}`);
+            } finally {
+                loadingOverlay.style.display = 'none';
+            }
+        }
+
+        async function handleManualAdd() {
+            const name = manualRegistrarSelect.value;
+            const dateValue = manualSessionDate.value;
+            const sessionType = document.querySelector('input[name="manual-session-type"]:checked').value;
+            const details = manualSessionDetails.value.trim();
+
+            if (!name || !dateValue || !details) {
+                alert("Please fill out all fields: Registrar, Date, and Details.");
+                return;
+            }
+            const dateStr = formatDateForJson(dateValue);
+            if (isOnLeave(name, dateValue, registrarsData)) {
+                if (!confirm(`Warning: ${name} is on leave on ${dateStr}. Add session anyway?`)) return;
+            }
+            const clashRole = checkRegularShiftClash(name, dateStr, sessionType);
+            if (clashRole) {
+                if (!confirm(`Warning: ${name} is already on a ${clashRole} shift in this session. Add session anyway?`)) return;
+            }
+
+            const newRotaData = JSON.parse(JSON.stringify(rotaData));
+            let dateEntry = newRotaData.find(e => e.Date === dateStr);
+            if (!dateEntry) {
+                dateEntry = { "Date": dateStr, "Shifts": { "AM": {"Additional":[]}, "PM": {"Additional":[]} } };
+                newRotaData.push(dateEntry);
+            }
+            if (!dateEntry.Shifts[sessionType]) dateEntry.Shifts[sessionType] = {};
+            if (!dateEntry.Shifts[sessionType].Additional) dateEntry.Shifts[sessionType].Additional = [];
+            
+            if (dateEntry.Shifts[sessionType].Additional.some(s => s[0] === name)) {
+                 alert(`Error: ${name} already has an additional session for ${dateStr} ${sessionType}.`);
+                 return;
+            }
+            dateEntry.Shifts[sessionType].Additional.push([name, dateStr, sessionType, details]);
+            await performManualSave(newRotaData, `Add manual session for ${name} on ${dateStr}`);
+        }
+
+        async function handleManualDelete() {
+            if (!selectedManualSession) { alert("Please select a session to delete."); return; }
+            if (!confirm(`Delete session for ${selectedManualSession.name} on ${selectedManualSession.date}?`)) return;
+            
+            const newRotaData = JSON.parse(JSON.stringify(rotaData));
+            const dateEntry = newRotaData.find(e => e.Date === selectedManualSession.date);
+            if (dateEntry) {
+                const sessions = dateEntry.Shifts[selectedManualSession.sessionType].Additional;
+                const index = sessions.findIndex(s => s[0] === selectedManualSession.name && s[3] === selectedManualSession.details);
+                if (index > -1) sessions.splice(index, 1);
+            }
+            await performManualSave(newRotaData, `Delete manual session for ${selectedManualSession.name} on ${selectedManualSession.date}`);
+        }
+
+        async function handleManualUpdate() {
+            if (!selectedManualSession) { alert("Please select a session to update."); return; }
+            
+            const newName = manualRegistrarSelect.value;
+            const newDateValue = manualSessionDate.value;
+            const newSessionType = document.querySelector('input[name="manual-session-type"]:checked').value;
+            const newDetails = manualSessionDetails.value.trim();
+            if (!newName || !newDateValue || !newDetails) { alert("Please fill out all fields."); return; }
+
+            const newDateStr = formatDateForJson(newDateValue);
+            if (isOnLeave(newName, newDateValue, registrarsData)) {
+                if (!confirm(`Warning: ${newName} is on leave on ${newDateStr}. Update anyway?`)) return;
+            }
+            const clashRole = checkRegularShiftClash(newName, newDateStr, newSessionType);
+            if (clashRole) {
+                if (!confirm(`Warning: ${newName} is already on a ${clashRole} shift. Update anyway?`)) return;
+            }
+
+            const newRotaData = JSON.parse(JSON.stringify(rotaData));
+            // 1. Delete old entry
+            let oldDateEntry = newRotaData.find(e => e.Date === selectedManualSession.date);
+            if (oldDateEntry) {
+                 const sessions = oldDateEntry.Shifts[selectedManualSession.sessionType].Additional;
+                 const index = sessions.findIndex(s => s[0] === selectedManualSession.name && s[3] === selectedManualSession.details);
+                 if (index > -1) sessions.splice(index, 1);
+            }
+            // 2. Add new entry
+            let newDateEntry = newRotaData.find(e => e.Date === newDateStr);
+            if (!newDateEntry) {
+                newDateEntry = { "Date": newDateStr, "Shifts": { "AM": {"Additional":[]}, "PM": {"Additional":[]} } };
+                newRotaData.push(newDateEntry);
+            }
+            if (!newDateEntry.Shifts[newSessionType]) newDateEntry.Shifts[newSessionType] = {};
+            if (!newDateEntry.Shifts[newSessionType].Additional) newDateEntry.Shifts[newSessionType].Additional = [];
+            newDateEntry.Shifts[newSessionType].Additional.push([newName, newDateStr, newSessionType, newDetails]);
+            
+            await performManualSave(newRotaData, `Update manual session for ${newName} on ${newDateStr}`);
+        }
+
         // --- Initialization ---
         async function initializeApp() {
-            // ADDED: A check to ensure the token has been received
             if (!headers.Authorization) {
-                console.error("GitHub Token not received. App cannot start.");
                 loadingOverlay.innerHTML = "<p>Error: Authentication failed. Please reload.</p>";
                 return;
             }
-
             loadingOverlay.innerHTML = "<p>Loading Rota Data...</p>";
             try {
                 [rotaData, registrarsData] = await Promise.all([
@@ -522,28 +721,33 @@
                 ]);
 
                 if (!rotaData || !registrarsData) {
-                    loadingOverlay.innerHTML = "<p>Error: Could not load initial data. Check console.</p>";
+                    loadingOverlay.innerHTML = "<p>Error: Could not load initial data.</p>";
                     return;
                 }
                 
                 const registrarNames = registrarsData.map(r => r.name).sort();
-                registrarToAssignSelect.innerHTML = '';
-                registrarNames.forEach(name => {
-                    const option = document.createElement('option');
-                    option.value = name;
-                    option.textContent = name;
-                    registrarToAssignSelect.appendChild(option);
-                });
+                
+                // Populate dropdowns for ALL tabs
+                const optionsHtml = registrarNames.map(name => `<option value="${name}">${name}</option>`).join('');
+                registrarToAssignSelect.innerHTML = optionsHtml;
+                manualRegistrarSelect.innerHTML = optionsHtml;
                 registrarToAssignSelect.disabled = false;
 
+                // Event listeners for original tabs
                 swapDate1.addEventListener('change', (e) => populateShiftsDropdown(e.target.value, swapShift1));
                 swapDate2.addEventListener('change', (e) => populateShiftsDropdown(e.target.value, swapShift2));
                 performSwapBtn.addEventListener('click', handleSwap);
-                
                 coverDate.addEventListener('change', (e) => populateShiftsDropdown(e.target.value, coverShift, true));
                 coverShift.addEventListener('change', updateRegistrarToCoverDropdown);
                 performAssignBtn.addEventListener('click', handleCover);
                 performRemoveBtn.addEventListener('click', handleRemoveFromShift);
+
+                // Initialize and set listeners for new tab
+                populateManualSessionsTable();
+                manualAddBtn.addEventListener('click', handleManualAdd);
+                manualDeleteBtn.addEventListener('click', handleManualDelete);
+                manualUpdateBtn.addEventListener('click', handleManualUpdate);
+                manualClearBtn.addEventListener('click', clearManualForm);
 
                 loadingOverlay.style.display = 'none';
                 mainContent.style.display = 'block';
@@ -554,18 +758,13 @@
             }
         }
 
-        // REMOVED: The old `document.addEventListener('DOMContentLoaded', initializeApp);`
-        // ADDED: A listener that waits for the token from `index.html`
         window.addEventListener('message', (event) => {
             const pat = event.data;
             if (pat && typeof pat === 'string') {
-                console.log("Token received for rota editor.");
-                // Set up the headers object for all future API calls
                 headers = {
                     "Authorization": `token ${pat}`,
                     "Accept": "application/vnd.github.v3+json"
                 };
-                // Now, initialize the application
                 initializeApp();
             }
         }, false);
