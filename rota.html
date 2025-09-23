@@ -343,29 +343,51 @@
             let shiftsFound = false;
             const shiftTypes = ["Duty", "Reporting", "Ultrasound"];
             const sessions = ["AM", "PM"];
-            sessions.forEach(session => {
-                shiftTypes.forEach(role => {
-                    const registrars = rotaEntry?.Shifts?.[session]?.[role] || [];
-                    if (registrars.length > 0) {
-                        registrars.forEach(reg => {
-                           const option = document.createElement('option');
-                           option.value = `${session} ${role}: ${reg}`;
-                           option.textContent = `${session} ${role}: ${reg}`;
-                           selectElement.appendChild(option);
-                           shiftsFound = true;
-                        });
-                    } else if (includeEmpty) {
-                        const option = document.createElement('option');
-                        option.value = `${session} ${role}: [Empty]`;
-                        option.textContent = `${session} ${role}: [Empty]`;
-                        selectElement.appendChild(option);
-                        shiftsFound = true;
-                    }
+        
+            if (rotaEntry && rotaEntry.Shifts) { // Check if rotaEntry and Shifts exist
+                sessions.forEach(session => {
+                    shiftTypes.forEach(role => {
+                        const registrars = rotaEntry.Shifts[session]?.[role] || [];
+                        if (registrars.length > 0) {
+                            registrars.forEach(reg => {
+                                const option = document.createElement('option');
+                                option.value = `${session} ${role}: ${reg}`;
+                                option.textContent = `${session} ${role}: ${reg}`;
+                                selectElement.appendChild(option);
+                                shiftsFound = true;
+                            });
+                        } else if (includeEmpty) {
+                            const option = document.createElement('option');
+                            option.value = `${session} ${role}: [Empty]`;
+                            option.textContent = `${session} ${role}: [Empty]`;
+                            selectElement.appendChild(option);
+                            shiftsFound = true;
+                        }
+                    });
                 });
-            });
+            }
+        
+        
+            // --- ADD THIS SECTION to automatically select the first AM Duty shift ---
+            for (let i = 0; i < selectElement.options.length; i++) {
+                // Check if the option text starts with "AM Duty"
+                if (selectElement.options[i].value.startsWith('AM Duty:')) {
+                    selectElement.selectedIndex = i; // Select this option
+                    break; // Stop searching once the first one is found
+                }
+            }
+            // --- END OF NEW SECTION ---
+        
+        
             if (!shiftsFound) {
                 selectElement.innerHTML = '<option>No shifts found for this date</option>';
                 selectElement.disabled = true;
+            }
+        
+            // Manually trigger the change event if the element is the coverShift dropdown
+            // This ensures the "Registrar to be Covered" dropdown updates automatically
+            if (selectElement.id === 'cover-shift') {
+                selectElement.dispatchEvent(new Event('change'));
             }
         }
         function updateRegistrarToCoverDropdown() {
