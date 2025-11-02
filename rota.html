@@ -226,8 +226,8 @@
                         <div class="form-group">
                             <label>Session</label>
                             <div class="radio-group">
-                               <label><input type="radio" name="manual-session-type" value="AM" checked> AM</label>
-                               <label><input type="radio" name="manual-session-type" value="PM"> PM</label>
+                                <label><input type="radio" name="manual-session-type" value="AM" checked> AM</label>
+                                <label><input type="radio" name="manual-session-type" value="PM"> PM</label>
                             </div>
                         </div>
                         <div class="form-group">
@@ -324,6 +324,68 @@
             const putResponse = await fetch(url, { method: 'PUT', headers, body: JSON.stringify(body) });
             if (!putResponse.ok) throw new Error(`GitHub API Error on write: ${putResponse.status} ${putResponse.statusText}`);
             return await putResponse.json();
+        }
+
+        // =====================================================================
+        // === NEW FUNCTION: To update the logs.txt file =======================
+        // =====================================================================
+        async function githubUpdateLogFile(logMessage) {
+            const LOG_FILE_PATH = "logs.txt";
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${FOLDER_PATH}/${LOG_FILE_PATH}`;
+            let existingContent = '';
+            let fileSha = undefined;
+
+            try {
+                // 1. Try to fetch the existing log file to get its content and SHA
+                const getResponse = await fetch(`${url}?ref=${BRANCH}&t=${new Date().getTime()}`, { headers });
+                if (getResponse.ok) {
+                    const fileData = await getResponse.json();
+                    existingContent = atob(fileData.content);
+                    fileSha = fileData.sha;
+                } else if (getResponse.status !== 404) {
+                    throw new Error(`Could not fetch log file: ${getResponse.statusText}`);
+                }
+                // If status is 404, we proceed to create a new file.
+            } catch (error) {
+                console.error("Error fetching log file, will attempt to create a new one.", error);
+            }
+
+            // 2. Prepare the new, appended content
+            const timestamp = new Date().toISOString();
+            const newLogEntry = `${timestamp} - ${logMessage}\n`;
+            const updatedContent = existingContent + newLogEntry;
+            const contentB64 = btoa(updatedContent);
+
+            // 3. Prepare the request body for the PUT request
+            const body = {
+                message: `Log: ${logMessage.substring(0, 50)}`, // Abridged commit message
+                content: contentB64,
+                branch: BRANCH
+            };
+            if (fileSha) {
+                body.sha = fileSha; // Must include SHA if we are updating an existing file
+            }
+
+            // 4. Perform the PUT request to write/create the file
+            try {
+                const putResponse = await fetch(url, { method: 'PUT', headers, body: JSON.stringify(body) });
+                if (!putResponse.ok) {
+                    throw new Error(`GitHub API Error on log write: ${putResponse.status} ${putResponse.statusText}`);
+                }
+                console.log("Change logged successfully to logs.txt.");
+            } catch (error) {
+                // We only log this to the console so it doesn't interrupt the user.
+                // The main rota change was already successful.
+                console.error("CRITICAL: Failed to write to log file:", error);
+            }
+        }
+        
+        // =====================================================================
+        // === NEW FUNCTION: To get initials from a full name ==================
+        // =====================================================================
+        function getInitials(name) {
+            if (!name || typeof name !== 'string') return '';
+            return name.split(' ').map(part => part[0]).join('').toUpperCase();
         }
 
         function isOnLeave(registrarName, date, regData) {
@@ -480,10 +542,17 @@
                 if (index > -1) { shiftList.splice(index, 1, parsed1.registrar); updated2 = true; }
             }
             if (!updated1 || !updated2) { alert("Error: Could not find one or both registrars on their specified shifts. The rota might have been updated. Please reload."); return; }
+            
             loadingOverlay.style.display = 'flex';
-            const result = await githubWriteFile('rota.json', newRotaData, `Swap shifts: ${parsed1.registrar} and ${parsed2.registrar}`);
+            const commitMessage = `Swap shifts: ${parsed1.registrar} (${date1Str}) and ${parsed2.registrar} (${date2Str})`;
+            const result = await githubWriteFile('rota.json', newRotaData, commitMessage);
             loadingOverlay.style.display = 'none';
+
             if (result) {
+                // MODIFIED: Add logging after successful save
+                const logMessage = `SWAP: ${getInitials(parsed1.registrar)} (${parsed1.session} ${parsed1.role} on ${date1Str}) with ${getInitials(parsed2.registrar)} (${parsed2.session} ${parsed2.role} on ${date2Str}).`;
+                await githubUpdateLogFile(logMessage);
+
                 alert("Shifts swapped successfully!");
                 rotaData = newRotaData;
                 populateShiftsDropdown(date1, swapShift1);
@@ -511,11 +580,22 @@
                 const index = shiftList.indexOf(registrarToCover);
                 if (index > -1) { shiftList.splice(index, 1, coveringRegistrar); } else { alert(`Error: Could not find ${registrarToCover} on the shift. Please reload.`); return; }
             }
+            
             loadingOverlay.style.display = 'flex';
             const commitMessage = selectedShift.includes('[Empty]') ? `Assign ${coveringRegistrar} to ${session} ${role} on ${dateStr}` : `Cover shift for ${registrarToCover} with ${coveringRegistrar} on ${dateStr}`;
             const result = await githubWriteFile('rota.json', newRotaData, commitMessage);
             loadingOverlay.style.display = 'none';
+            
             if (result) {
+                // MODIFIED: Add logging after successful save
+                let logMessage;
+                if (selectedShift.includes('[Empty]')) {
+                    logMessage = `ASSIGN: ${getInitials(coveringRegistrar)} to ${session} ${role} on ${dateStr}.`;
+                } else {
+                    logMessage = `COVER: ${getInitials(registrarToCover)}'s ${session} ${role} shift on ${dateStr} taken by ${getInitials(coveringRegistrar)}.`;
+                }
+                await githubUpdateLogFile(logMessage);
+
                 alert("Shift updated successfully!");
                 rotaData = newRotaData;
                 populateShiftsDropdown(date, coverShift, true);
@@ -537,11 +617,17 @@
                 if (index > -1) { shiftList.splice(index, 1); updated = true; }
             }
             if (!updated) { alert("Error: Could not find the registrar on the specified shift. The data may be out of date. Please reload."); return; }
+            
             loadingOverlay.style.display = 'flex';
             const commitMessage = `Remove ${registrarToRemove} from ${session} ${role} on ${dateStr}`;
             const result = await githubWriteFile('rota.json', newRotaData, commitMessage);
             loadingOverlay.style.display = 'none';
+
             if (result) {
+                // MODIFIED: Add logging after successful save
+                const logMessage = `REMOVE: ${getInitials(registrarToRemove)} from ${session} ${role} on ${dateStr}.`;
+                await githubUpdateLogFile(logMessage);
+
                 alert(`${registrarToRemove} has been removed from the shift.`);
                 rotaData = newRotaData;
                 populateShiftsDropdown(date, coverShift, true);
@@ -601,11 +687,16 @@
             manualDeleteBtn.disabled = true;
         }
 
-        async function performManualSave(updatedRotaData, commitMessage) {
+        // MODIFIED: Function signature now accepts a logMessage
+        async function performManualSave(updatedRotaData, commitMessage, logMessage) {
             loadingOverlay.innerHTML = "<p>Saving changes to GitHub...</p>";
             loadingOverlay.style.display = 'flex';
             try {
                 await githubWriteFile('rota.json', updatedRotaData, commitMessage);
+                
+                // MODIFIED: Call the logger function
+                await githubUpdateLogFile(logMessage);
+
                 rotaData = updatedRotaData;
                 populateManualSessionsTable();
                 clearManualForm();
@@ -651,7 +742,11 @@
                  return;
             }
             dateEntry.Shifts[sessionType].Additional.push([name, dateStr, sessionType, details]);
-            await performManualSave(newRotaData, `Add manual session for ${name} on ${dateStr}`);
+            
+            // MODIFIED: Create log message and pass it to the save function
+            const commitMessage = `Add manual session for ${name} on ${dateStr}`;
+            const logMessage = `ADD MANUAL: ${getInitials(name)} for ${sessionType} on ${dateStr}. Details: ${details}`;
+            await performManualSave(newRotaData, commitMessage, logMessage);
         }
 
         async function handleManualDelete() {
@@ -665,7 +760,11 @@
                 const index = sessions.findIndex(s => s[0] === selectedManualSession.name && s[3] === selectedManualSession.details);
                 if (index > -1) sessions.splice(index, 1);
             }
-            await performManualSave(newRotaData, `Delete manual session for ${selectedManualSession.name} on ${selectedManualSession.date}`);
+
+            // MODIFIED: Create log message and pass it to the save function
+            const commitMessage = `Delete manual session for ${selectedManualSession.name} on ${selectedManualSession.date}`;
+            const logMessage = `DELETE MANUAL: ${getInitials(selectedManualSession.name)}'s ${selectedManualSession.sessionType} session on ${selectedManualSession.date}. Details: ${selectedManualSession.details}`;
+            await performManualSave(newRotaData, commitMessage, logMessage);
         }
 
         async function handleManualUpdate() {
@@ -704,7 +803,10 @@
             if (!newDateEntry.Shifts[newSessionType].Additional) newDateEntry.Shifts[newSessionType].Additional = [];
             newDateEntry.Shifts[newSessionType].Additional.push([newName, newDateStr, newSessionType, newDetails]);
             
-            await performManualSave(newRotaData, `Update manual session for ${newName} on ${newDateStr}`);
+            // MODIFIED: Create log message and pass it to the save function
+            const commitMessage = `Update manual session for ${newName} on ${newDateStr}`;
+            const logMessage = `UPDATE MANUAL: Changed ${getInitials(selectedManualSession.name)}'s session (${selectedManualSession.sessionType} on ${selectedManualSession.date}) to ${getInitials(newName)} (${newSessionType} on ${newDateStr}). New Details: ${newDetails}`;
+            await performManualSave(newRotaData, commitMessage, logMessage);
         }
 
         // --- Initialization ---
